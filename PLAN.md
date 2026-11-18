@@ -157,9 +157,9 @@ Errors: `{ "error": { "code": "<stable>", "message": "<human>" } }`. Codes: `bad
 | `GET /api/export` | ✓ | user's non-deleted cards in the export JSON format (§7.5) |
 | `GET /api/config` | – | `{registrationOpen, version}` so Settings can show/hide "Create account" pre-login |
 
-Middleware order: recover → security headers → body cap (1 MB, `http.MaxBytesReader`) → auth (per-route). No request logging of bodies; log method, path, status, duration only.
+Middleware order: recover → security headers → body cap (1 MB, `http.MaxBytesReader`) → auth (per-route). No request logging of bodies; log method, path (card IDs redacted), status, duration only.
 
-Rate limit: token bucket per IP (burst 5, refill 1/12 s) for login+register; map pruned every 10 min. Client IP = `RemoteAddr`, or first `X-Forwarded-For` hop when `TRUST_PROXY_HEADERS=true`.
+Rate limit: token bucket per IP (burst 5, refill 1/12 s) for login+register; map pruned every 10 min and capped at 100k buckets (unknown keys past the cap share one overflow bucket). Client IP = `RemoteAddr`, or the **last** `X-Forwarded-For` hop when `TRUST_PROXY_HEADERS=true` (assumes exactly one trusted proxy; earlier hops are client-supplied).
 
 Static: embedded FS. `/assets/*` → `Cache-Control: public, max-age=31536000, immutable`; `index.html`, `sw.js`, `manifest.webmanifest`, `registerSW.js` → `no-cache`. Unknown non-`/api` GET → `index.html` (SPA). Unknown `/api/*` → JSON 404.
 
@@ -171,6 +171,8 @@ Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval
 X-Content-Type-Options: nosniff
 Referrer-Policy: no-referrer
 Permissions-Policy: camera=(self), screen-wake-lock=(self)
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
 ```
 
 CLI (`cmd/wallet`): `wallet serve` (default), `wallet healthcheck` (GET `http://127.0.0.1:$PORT/api/health`, exit 0/1, 3 s timeout), `wallet create-user <username>` (password from `WALLET_PASSWORD` env or prompted on TTY; works while server is running thanks to WAL + busy_timeout).

@@ -50,7 +50,6 @@ export interface SessionResponse {
 
 export interface ServerConfig {
   registrationOpen: boolean;
-  version: string;
 }
 
 export interface SyncRequest {

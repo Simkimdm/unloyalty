@@ -8,6 +8,26 @@ interface Props {
   onDetected: (barcode: PendingBarcode) => void;
 }
 
+/** Longest side of a photo handed to the decoder; larger images only cost memory, not accuracy. */
+const MAX_PHOTO_SIDE = 2048;
+
+/** Decode a picked photo, downscaled so a huge image can't exhaust the phone's memory in the WASM decoder. */
+async function decodePhoto(file: Blob): Promise<DecodeMapping[]> {
+  const bmp = await createImageBitmap(file);
+  try {
+    const scale = Math.min(1, MAX_PHOTO_SIDE / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bmp.width * scale));
+    canvas.height = Math.max(1, Math.round(bmp.height * scale));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return decodeImage(file);
+    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    return decodeImage(ctx.getImageData(0, 0, canvas.width, canvas.height));
+  } finally {
+    bmp.close();
+  }
+}
+
 /** "Scan from photo": decode a picked image; works without camera permission and for screenshots. */
 export function PhotoScan({ onDetected }: Props) {
   const [busy, setBusy] = useState(false);
@@ -24,7 +44,7 @@ export function PhotoScan({ onDetected }: Props) {
     setChoices([]);
     let results: DecodeMapping[];
     try {
-      results = await decodeImage(file);
+      results = await decodePhoto(file);
     } catch (err) {
       setBusy(false);
       setError(`Couldn’t read that image (${err instanceof Error ? err.message : String(err)})`);
