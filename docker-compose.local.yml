@@ -1,0 +1,24 @@
+# Unloyalty built from source and run locally: http://localhost:8080 (localhost needs no HTTPS).
+#   docker compose -f docker-compose.local.yml up -d --build
+#   docker compose -f docker-compose.local.yml exec unloyalty /wallet create-user <you>
+# Rebuild after changes with `--build`. For HTTPS access from your phone, see
+# docker-compose.tailscale.yml or docker-compose.yml (Traefik).
+
+services:
+  unloyalty:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    image: unloyalty:dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080" # loopback only; put a reverse proxy in front for remote access
+    environment:
+      ALLOW_REGISTRATION: "false" # the first account can always register; add more with `create-user`
+      SESSION_TTL: 90d
+    volumes:
+      - unloyalty-data:/data
+
+volumes:
+  unloyalty-data:

@@ -1,0 +1,63 @@
+# Unloyalty behind its own Traefik: HTTPS via Let's Encrypt for a public domain.
+#   UNLOYALTY_HOST=wallet.example.com ACME_EMAIL=you@example.com \
+#     docker compose -f docker-compose.traefik.yml up -d --build
+#   docker compose -f docker-compose.traefik.yml exec unloyalty /wallet create-user <you>
+# DNS for UNLOYALTY_HOST must point at this host; ports 80/443 are published for the ACME challenges.
+# Already running your own Traefik? Use docker-compose.yml instead. Localhost-only without a domain?
+# Use docker-compose.local.yml.
+
+services:
+  traefik:
+    image: traefik:v3.3
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      # Reads container labels; needs the socket read-only.
+      - --providers.docker.constraints=Labels(`traefik.enable`,`true`)
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?set ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      # While testing, use the staging CA to avoid Let's Encrypt rate limits:
+      # - --certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-letsencrypt:/letsencrypt
+    networks:
+      - proxy
+
+  unloyalty:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    image: unloyalty:dev
+    restart: unless-stopped
+    environment:
+      ALLOW_REGISTRATION: "false" # the first account can always register; add more with `create-user`
+      SESSION_TTL: 90d
+      TRUST_PROXY_HEADERS: "true" # only Traefik can reach the container (no published ports)
+    volumes:
+      - unloyalty-data:/data
+    networks:
+      - proxy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.unloyalty.rule: Host(`${UNLOYALTY_HOST:?set UNLOYALTY_HOST}`)
+      traefik.http.routers.unloyalty.entrypoints: websecure
+      traefik.http.routers.unloyalty.tls.certresolver: letsencrypt
+      traefik.http.services.unloyalty.loadbalancer.server.port: "8080"
+
+volumes:
+  unloyalty-data:
+  traefik-letsencrypt:
+
+networks:
+  proxy:

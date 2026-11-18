@@ -85,6 +85,13 @@ UNLOYALTY_HOST=wallet.example.com docker compose up -d
 docker compose exec unloyalty /wallet create-user <you>
 ```
 
+No Traefik of your own yet? `docker-compose.traefik.yml` starts Traefik alongside the app and builds the image locally — it needs a public `UNLOYALTY_HOST` whose DNS points at this machine, plus `ACME_EMAIL` for Let's Encrypt:
+
+```sh
+UNLOYALTY_HOST=wallet.example.com ACME_EMAIL=you@example.com \
+  docker compose -f docker-compose.traefik.yml up -d --build
+```
+
 For Caddy: `wallet.example.com { reverse_proxy unloyalty:8080 }`, with `TRUST_PROXY_HEADERS=true`.
 
 ## Accounts
