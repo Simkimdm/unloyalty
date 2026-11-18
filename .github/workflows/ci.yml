@@ -44,6 +44,10 @@ jobs:
         working-directory: web
         run: pnpm install --frozen-lockfile
 
+      - name: Dependency audit
+        working-directory: web
+        run: pnpm audit --audit-level=high
+
       - name: Web typecheck and unit tests
         working-directory: web
         run: pnpm typecheck && pnpm test

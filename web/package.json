@@ -15,24 +15,32 @@
     "screenshots": "playwright test -c playwright.screenshots.config.ts"
   },
   "packageManager": "pnpm@10.33.2",
+  "pnpm": {
+    "overrides": {
+      "workbox-build>glob": "^14.0.6"
+    },
+    "auditConfig": {
+      "ignoreGhsas": ["GHSA-fc5q-39xc-vjpf"]
+    }
+  },
   "dependencies": {
     "bwip-js": "^4.11.4",
     "dexie": "^4.4.7",
-    "preact": "^11.1.0",
+    "preact": "^11.2.0",
     "preact-iso": "^2.12.2",
-    "zxing-wasm": "^3.1.6"
+    "zxing-wasm": "^3.1.7"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.1",
     "@preact/preset-vite": "^2.10.6",
     "@types/node": "^26.6.6",
     "@vite-pwa/assets-generator": "^2.0.0",
-    "fake-indexeddb": "^6.2.6",
+    "fake-indexeddb": "^6.2.8",
     "sharp": "^0.35.5",
     "typescript": "^7.0.2",
-    "vite": "^8.3.5",
+    "vite": "^8.3.8",
     "vite-plugin-pwa": "^2.0.0",
-    "vitest": "^5.0.5",
+    "vitest": "^5.1.1",
     "workbox-build": "^7.4.1",
     "workbox-window": "^7.4.1"
   }

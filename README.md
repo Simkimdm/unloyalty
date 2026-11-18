@@ -110,7 +110,7 @@ For Caddy: `wallet.example.com { reverse_proxy unloyalty:8080 }`, with `TRUST_PR
 | `DATA_DIR` | `/data` | holds `wallet.db` (SQLite) |
 | `ALLOW_REGISTRATION` | `false` | let anyone with the URL create an account (the first account is always allowed) |
 | `SESSION_TTL` | `90d` | sign-ins expire after this long unused (`90d`, `36h`, `1d12h`) |
-| `TRUST_PROXY_HEADERS` | `false` | use `X-Forwarded-For` for login rate limiting and `X-Forwarded-Proto` for HSTS. Only enable when the port isn't reachable except through your proxy. |
+| `TRUST_PROXY_HEADERS` | `false` | trust `X-Forwarded-*` from exactly one proxy in front of the container: the client IP for login rate limiting is the **last** `X-Forwarded-For` hop (earlier hops are client-supplied), and `X-Forwarded-Proto: https` enables HSTS. Only enable when the port isn't reachable except through your proxy. |
 
 ## Backup and moving
 
@@ -142,7 +142,7 @@ The first `make e2e` needs a browser: `cd web && pnpm exec playwright install ch
 **arm64 images:** `docker buildx build --platform linux/arm64 -t unloyalty:arm64 --load .` builds without emulation, because Go cross-compiles. Running that image on an x86 machine needs QEMU (`docker run --privileged --rm tonistiigi/binfmt --install arm64`).
 
 **CI** (`.github/workflows/ci.yml`) runs on every push and pull request:
-- **Test job:** web typecheck and unit tests, `go vet` and `go test`, and the Playwright suite against the real server binary.
+- **Test job:** web typecheck, unit tests and dependency audit (`pnpm audit --audit-level=high`), `go vet` and `go test`, and the Playwright suite against the real server binary.
 - **Image job:** builds the image, checks the budgets on amd64, and smoke-tests the arm64 image under QEMU.
 - **Publishing:** pushes to `main` and `v*` tags publish to `ghcr.io/ehxor/unloyalty`. Pull requests only build.
 

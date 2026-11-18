@@ -76,13 +76,16 @@ func (s *Server) Handler() http.Handler {
 	return s.recoverer(s.logRequests(s.securityHeaders(s.limitBody(mux))))
 }
 
-// clientIP is the address used for rate limiting: the TCP peer, or the first X-Forwarded-For hop
-// when the server sits behind a trusted proxy.
+// clientIP is the address used for rate limiting: the TCP peer, or the last X-Forwarded-For hop
+// when the server sits behind exactly one trusted proxy. That proxy appends the address it saw;
+// everything to the left of it is client-supplied and must not be trusted.
 func (s *Server) clientIP(r *http.Request) string {
 	if s.cfg.TrustProxyHeaders {
 		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-			first, _, _ := strings.Cut(fwd, ",")
-			return strings.TrimSpace(first)
+			if i := strings.LastIndex(fwd, ","); i >= 0 {
+				fwd = fwd[i+1:]
+			}
+			return strings.TrimSpace(fwd)
 		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -104,6 +107,7 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Permissions-Policy", "camera=(self), screen-wake-lock=(self)")
 		h.Set("Cross-Origin-Opener-Policy", "same-origin")
+		h.Set("Cross-Origin-Resource-Policy", "same-origin")
 		// Only a trusted proxy can tell us the client connection was HTTPS.
 		if s.cfg.TrustProxyHeaders && r.Header.Get("X-Forwarded-Proto") == "https" {
 			h.Set("Strict-Transport-Security", "max-age=31536000")
@@ -131,8 +135,20 @@ func (r *statusRecorder) WriteHeader(code int) {
 
 func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
-// logRequests logs method, path, status and duration. Never bodies or query strings: card data stays out of logs.
-// Successful health checks (every 30 s from Docker) aren't logged.
+// redactPath replaces card IDs in /card/... URLs so the access log never contains card identifiers.
+func redactPath(p string) string {
+	if !strings.HasPrefix(p, "/card/") {
+		return p
+	}
+	parts := strings.Split(p, "/")
+	if len(parts) > 2 && parts[2] != "" {
+		parts[2] = ":id"
+	}
+	return strings.Join(parts, "/")
+}
+
+// logRequests logs method, path (card IDs redacted), status and duration. Never bodies or query strings:
+// card data stays out of logs. Successful health checks (every 30 s from Docker) aren't logged.
 func (s *Server) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -141,7 +157,7 @@ func (s *Server) logRequests(next http.Handler) http.Handler {
 		if r.URL.Path == "/api/health" && rec.status == http.StatusOK {
 			return
 		}
-		s.log.Info("request", "method", r.Method, "path", r.URL.Path, "status", rec.status, "duration", time.Since(start).Round(time.Microsecond))
+		s.log.Info("request", "method", r.Method, "path", redactPath(r.URL.Path), "status", rec.status, "duration", time.Since(start).Round(time.Microsecond))
 	})
 }
 

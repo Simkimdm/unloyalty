@@ -10,7 +10,7 @@ RUN pnpm install --frozen-lockfile
 COPY web/ ./
 RUN GIT_SHA=$VERSION pnpm build
 
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS server
+FROM --platform=$BUILDPLATFORM golang:1.27.4-alpine AS server
 ARG TARGETOS TARGETARCH VERSION=dev
 WORKDIR /src/server
 COPY server/go.mod server/go.sum ./

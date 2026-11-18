@@ -297,13 +297,80 @@ func TestStaticServingAndHeaders(t *testing.T) {
 	if res.status != 404 || res.errorCode() != codeNotFound {
 		t.Errorf("unknown API path: %d %s", res.status, res.body)
 	}
-	for _, header := range []string{"Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy", "Permissions-Policy"} {
+	for _, header := range []string{"Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy", "Permissions-Policy", "Cross-Origin-Resource-Policy"} {
 		if res.header.Get(header) == "" {
 			t.Errorf("missing %s", header)
 		}
 	}
 	if res.header.Get("Strict-Transport-Security") != "" {
 		t.Error("HSTS sent without a trusted proxy reporting HTTPS")
+	}
+}
+
+func TestClientIPUsesLastForwardedHop(t *testing.T) {
+	s := &Server{cfg: config.Config{TrustProxyHeaders: true}}
+	req, _ := http.NewRequest("GET", "/", nil)
+	// Everything left of the last hop is client-supplied and must be ignored.
+	req.Header.Set("X-Forwarded-For", "1.1.1.1, 6.6.6.6, 10.0.0.5")
+	if got := s.clientIP(req); got != "10.0.0.5" {
+		t.Errorf("multi-hop XFF: got %q, want the last hop", got)
+	}
+	req.Header.Set("X-Forwarded-For", "10.0.0.9")
+	if got := s.clientIP(req); got != "10.0.0.9" {
+		t.Errorf("single-hop XFF: got %q", got)
+	}
+	// Without a trusted proxy the header is ignored entirely.
+	plain := &Server{cfg: config.Config{}}
+	req2, _ := http.NewRequest("GET", "/", nil)
+	req2.Header.Set("X-Forwarded-For", "1.1.1.1")
+	req2.RemoteAddr = "192.0.2.1:1234"
+	if got := plain.clientIP(req2); got != "192.0.2.1" {
+		t.Errorf("untrusted XFF should fall back to RemoteAddr, got %q", got)
+	}
+}
+
+func TestRateLimitKeyedOnLastForwardedHop(t *testing.T) {
+	h := newHarness(t, config.Config{TrustProxyHeaders: true})
+	login := func(xff string) *http.Response {
+		body, _ := json.Marshal(credentials{Username: "nobody", Password: "whatever1"})
+		req, _ := http.NewRequest("POST", h.srv.URL+"/api/auth/login", bytes.NewReader(body))
+		req.Header.Set("X-Forwarded-For", xff)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			h.t.Fatal(err)
+		}
+		io.Copy(io.Discard, res.Body)
+		res.Body.Close()
+		return res
+	}
+	// Same last hop, different spoofed prefix: all attempts hit the same bucket.
+	for i := range 5 {
+		if res := login("1.2.3.4, 10.0.0.1"); res.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: %d", i+1, res.StatusCode)
+		}
+	}
+	if res := login("9.9.9.9, 10.0.0.1"); res.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("spoofed prefix must not reset the limit: %d", res.StatusCode)
+	}
+	// A different real client (different last hop) still has its own budget.
+	if res := login("10.0.0.2"); res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("different last hop should have a fresh bucket: %d", res.StatusCode)
+	}
+}
+
+func TestRedactPath(t *testing.T) {
+	for in, want := range map[string]string{
+		"/card/01900000-0000-7000-8000-0000000000aa":         "/card/:id",
+		"/card/01900000-0000-7000-8000-0000000000aa/edit":    "/card/:id/edit",
+		"/card/01900000-0000-7000-8000-0000000000aa/rescan":  "/card/:id/rescan",
+		"/card/":          "/card/",
+		"/settings":       "/settings",
+		"/api/sync":       "/api/sync",
+		"/":               "/",
+	} {
+		if got := redactPath(in); got != want {
+			t.Errorf("redactPath(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 

@@ -20,7 +20,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, codeInternal, "Database unavailable")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": s.version})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (s *Server) registrationOpen(r *http.Request) (bool, error) {
@@ -37,7 +37,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"registrationOpen": open, "version": s.version})
+	writeJSON(w, http.StatusOK, map[string]any{"registrationOpen": open})
 }
 
 type credentials struct {
